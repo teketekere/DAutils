@@ -14,21 +14,18 @@ import multiprocessing
 from copy import deepcopy
 import time
 from contextlib import contextmanager
-
-@contextmanager
-def timer(name):
-    t0 = time.time()
-    yield
-    print(f'[{name}] done in {time.time() - t0:.0f} s')
-    
+from myutils import timer    
 
 # global vars
 ## detect this path depends on envs
 images_path = '../input/ants/'
+#images_path = '../input/hoge/'
 
 features_path = '../features/'
 
 # define functions
+def check_imgpath(img):
+    return os.path.isfile(images_path + img)
 
 def load_image(img, usecv2=False):
     path = images_path + img
@@ -67,6 +64,9 @@ def color_analysis(img):
     return light_percent, dark_percent
 
 def perform_color_analysis_black(img):
+    if check_imgpath(img) ==False:
+        return -1
+
     im = load_image(img)
     im1, im2 = crop_horizontal(im)
 
@@ -81,6 +81,9 @@ def perform_color_analysis_black(img):
     return dark_percent
 
 def perform_color_analysis_white(img):
+    if check_imgpath(img) ==False:
+        return -1
+
     im = load_image(img)
     im1, im2 = crop_horizontal(im)
 
@@ -95,6 +98,9 @@ def perform_color_analysis_white(img):
     return light_percent
 
 def average_pixel_width(img):
+    if check_imgpath(img) ==False:
+        return -1
+
     im = load_image(img)    
     im_array = np.asarray(im.convert(mode='L'))
     edges_sigma1 = feature.canny(im_array, sigma=3)
@@ -102,6 +108,9 @@ def average_pixel_width(img):
     return apw*100
 
 def get_dominant_color(img):
+    if check_imgpath(img) ==False:
+        return [-1, -1, -1]
+
     im = load_image(img, usecv2=True)
     arr = np.float32(im)
     pixels = arr.reshape((-1, 3))
@@ -119,21 +128,33 @@ def get_dominant_color(img):
     return dominant_color
 
 def get_average_color(img):
+    if check_imgpath(img) ==False:
+        return [-1, -1, -1]
+
     im = load_image(img, usecv2=True)
     average_color = [im[:, :, i].mean() for i in range(im.shape[-1])]
     return average_color
 
 def get_size(img):
+    if check_imgpath(img) ==False:
+        return -1
+
     filename = images_path + img
     st = os.stat(filename)
     return st.st_size
 
 def get_dimensions(img):
+    if check_imgpath(img) ==False:
+        return [-1, -1]
+
     im = load_image(img)
     img_size = im.size
     return img_size
 
 def get_blurrness_score(img):
+    if check_imgpath(img) ==False:
+        return -1
+
     im = load_image(img, usecv2=True)
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     fm = cv2.Laplacian(im, cv2.CV_64F).var()
@@ -145,7 +166,7 @@ def get_arraylike_features(feature, inputcol, method, outputcol):
     print(outputcol, ' done')
     return retdf
 
-def get_imagefeatures(features, imgcol, prefix='', n_workers=1):
+def get_imagefeatures_multi(features, imgcol, prefix='', n_workers=1):
     prefix = prefix + '_'
     feature_params = [[perform_color_analysis_black, prefix+'dullness'],
                       [perform_color_analysis_white, prefix+'whiteness'],
@@ -178,9 +199,7 @@ def get_imagefeatures(features, imgcol, prefix='', n_workers=1):
     return features
 
 
-def save_features(features, filename, imgcol, deleteimgpath=True):
-    if deleteimgpath == True:
-        features.drop(imgcol, axis=1, inplace=True)
+def save_features(features, filename):
     filepath = features_path + filename
     features.to_feather(filepath)
 
@@ -191,6 +210,7 @@ if __name__ == '__main__':
 
     numcpu = multiprocessing.cpu_count()
     print(f'use {numcpu} cpus')
-    get_imagefeatures(features, 'imagepath', prefix='debug', n_workers=numcpu)
+    get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
 
-    save_features(features, 'sample.feather', imgcol='imagepath', deleteimgpath=True)
+    features.drop('imagepath', axis=1, inplace=True)
+    save_features(features, 'sample.feather')
