@@ -160,30 +160,41 @@ def get_blurrness_score(img):
     fm = cv2.Laplacian(im, cv2.CV_64F).var()
     return fm
 
-def get_arraylike_features(feature, inputcol, method, outputcol):
-    retdf = pd.DataFrame()
-    retdf[outputcol] = feature[inputcol].apply(method)
-    print(outputcol, ' done')
-    return retdf
+def get_arraylike_features(img):
+    methods = [perform_color_analysis_black,
+               perform_color_analysis_white,
+               average_pixel_width,
+               get_dominant_color,
+               get_average_color,
+               get_size,
+               get_dimensions,
+               get_blurrness_score
+              ]
+    results = []
+    for m in methods:
+        results.append(m(img))
+    return results
 
 def get_imagefeatures_multi(features, imgcol, prefix='', n_workers=1):
+    # todo: get_arraylike_featuresの引数にmethodsを渡してpartialで固定する
     prefix = prefix + '_'
-    feature_params = [[perform_color_analysis_black, prefix+'dullness'],
-                      [perform_color_analysis_white, prefix+'whiteness'],
-                      [average_pixel_width,          prefix+'average_pixel_width'],
-                      [get_dominant_color,           prefix+'dominant_color'],
-                      [get_average_color,            prefix+'average_color'],
-                      [get_size,                     prefix+'image_size'],
-                      [get_dimensions,               prefix+'dim_size'],
-                      [get_blurrness_score,          prefix+'blurrness']
-                     ]
-    params = [(features, imgcol, m, c) for m, c in feature_params]
+    params = [features[imgcol][i] for i in range(features.shape[0])]
     with timer('Image features extraction'):
         with Pool(processes=n_workers) as pool:
-            results = pool.starmap(get_arraylike_features, params)
+            results = pool.map(get_arraylike_features, params)
+
+        # transform into pd.df
+        features[prefix+'dullness'] = [results[i][0] for i in range(features.shape[0])]
+        features[prefix+'whiteness'] = [results[i][1] for i in range(features.shape[0])]
+        features[prefix+'average_pixel_width'] = [results[i][2] for i in range(features.shape[0])]
+        features[prefix+'dominant_color'] = [results[i][3] for i in range(features.shape[0])]
+        features[prefix+'average_color'] = [results[i][4] for i in range(features.shape[0])]
+        features[prefix+'image_size'] = [results[i][5] for i in range(features.shape[0])]
+        features[prefix+'dim_size'] = [results[i][6] for i in range(features.shape[0])]
+        features[prefix+'blurrness'] = [results[i][7] for i in range(features.shape[0])]
+
         
-        for r in results:
-            features[r.columns[0]] = r
+        # adhook
         features[prefix+'dominant_red'] = features[prefix+'dominant_color'].apply(lambda x: x[0]) / 255
         features[prefix+'dominant_green'] = features[prefix+'dominant_color'].apply(lambda x: x[1]) / 255
         features[prefix+'dominant_blue'] = features[prefix+'dominant_color'].apply(lambda x: x[2]) / 255
@@ -213,4 +224,4 @@ if __name__ == '__main__':
     get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
 
     features.drop('imagepath', axis=1, inplace=True)
-    save_features(features, 'sample.feather')
+    #save_features(features, 'sample.feather')
