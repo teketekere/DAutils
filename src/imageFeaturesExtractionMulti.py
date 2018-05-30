@@ -6,6 +6,7 @@ from PIL import Image as IMG
 import numpy as np
 import pandas as pd 
 import operator
+print('hey')
 import cv2
 import os 
 import gc
@@ -214,14 +215,16 @@ def save_features(features, filename):
     filepath = features_path + filename
     features.to_feather(filepath)
 
-if __name__ == '__main__':
-    imgs = os.listdir(images_path)
-    features = pd.DataFrame()
-    features['imagepath'] = imgs
 
-    numcpu = multiprocessing.cpu_count()
-    print(f'use {numcpu} cpus')
-    get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
+print('ohha')
+imgs = os.listdir(images_path)
+features = pd.DataFrame()
+features['imagepath'] = imgs
 
-    features.drop('imagepath', axis=1, inplace=True)
-    #save_features(features, 'sample.feather')
+numcpu = 2
+print(f'use {numcpu} cpus')
+get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
+
+features.drop('imagepath', axis=1, inplace=True)
+save_features(features, 'sample.feather')
+print('done')
