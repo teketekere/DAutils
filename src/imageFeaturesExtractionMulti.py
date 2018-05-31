@@ -19,12 +19,17 @@ from myutils import timer, reduce_mem_usage
 def check_imgpath(img):
     return os.path.isfile(img)
 
+def check_image(im):
+    if im is None:
+        return False
+
 def load_image(img, usecv2=False):
     path = img
     try:
         im = cv2.imread(path) if usecv2==True else IMG.open(path)
     except Exception as e:
-        print('Cannot open img: ', img)    
+        print('Cannot open img: ', img)
+        return None
     return im
 
 def crop_horizontal(im):
@@ -60,6 +65,9 @@ def perform_color_analysis_black(img):
         return -1
 
     im = load_image(img)
+    if check_image(im) == False:
+        return -1
+
     im1, im2 = crop_horizontal(im)
 
     try:
@@ -77,6 +85,9 @@ def perform_color_analysis_white(img):
         return -1
 
     im = load_image(img)
+    if check_image(im) == False:
+        return -1
+
     im1, im2 = crop_horizontal(im)
 
     try:
@@ -94,6 +105,9 @@ def average_pixel_width(img):
         return -1
 
     im = load_image(img)    
+    if check_image(im) == False:
+        return -1
+
     im_array = np.asarray(im.convert(mode='L'))
     edges_sigma1 = feature.canny(im_array, sigma=3)
     apw = (float(np.sum(edges_sigma1)) / (im.size[0]*im.size[1]))
@@ -104,6 +118,9 @@ def get_dominant_color(img):
         return [-1, -1, -1]
 
     im = load_image(img, usecv2=True)
+    if check_image(im) == False:
+        return [-1, -1, -1]
+
     arr = np.float32(im)
     pixels = arr.reshape((-1, 3))
 
@@ -124,11 +141,18 @@ def get_average_color(img):
         return [-1, -1, -1]
 
     im = load_image(img, usecv2=True)
+    if check_image(im) == False:
+        return [-1, -1, -1]
+
     average_color = [im[:, :, i].mean() for i in range(im.shape[-1])]
     return average_color
 
 def get_size(img):
     if check_imgpath(img) ==False:
+        return -1
+
+    im = load_image(img)
+    if check_image(im) == False:
         return -1
 
     st = os.stat(img)
@@ -139,6 +163,9 @@ def get_dimensions(img):
         return [-1, -1]
 
     im = load_image(img)
+    if check_image(im) == False:
+        return [-1, -1]
+
     img_size = im.size
     return img_size
 
@@ -147,6 +174,9 @@ def get_blurrness_score(img):
         return -1
 
     im = load_image(img, usecv2=True)
+    if check_image(im) == False:
+        return -1
+
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     fm = cv2.Laplacian(im, cv2.CV_64F).var()
     return fm
