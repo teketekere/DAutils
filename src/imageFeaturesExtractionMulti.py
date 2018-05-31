@@ -6,34 +6,25 @@ from PIL import Image as IMG
 import numpy as np
 import pandas as pd 
 import operator
-print('hey')
 import cv2
 import os 
 import gc
 from multiprocessing import Pool
 import multiprocessing
 from copy import deepcopy
-import time
-from contextlib import contextmanager
-from myutils import timer    
-
-# global vars
-## detect this path depends on envs
-images_path = '../input/ants/'
-#images_path = '../input/hoge/'
-
-features_path = '../features/'
+from functools import partial
+from myutils import timer
 
 # define functions
 def check_imgpath(img):
-    return os.path.isfile(images_path + img)
+    return os.path.isfile(img)
 
 def load_image(img, usecv2=False):
-    path = images_path + img
+    path = img
     try:
         im = cv2.imread(path) if usecv2==True else IMG.open(path)
     except Exception as e:
-        print('Cannot open img: ', images_path + img)    
+        print('Cannot open img: ', img)    
     return im
 
 def crop_horizontal(im):
@@ -140,8 +131,7 @@ def get_size(img):
     if check_imgpath(img) ==False:
         return -1
 
-    filename = images_path + img
-    st = os.stat(filename)
+    st = os.stat(img)
     return st.st_size
 
 def get_dimensions(img):
@@ -161,70 +151,67 @@ def get_blurrness_score(img):
     fm = cv2.Laplacian(im, cv2.CV_64F).var()
     return fm
 
-def get_arraylike_features(img):
-    methods = [perform_color_analysis_black,
-               perform_color_analysis_white,
-               average_pixel_width,
-               get_dominant_color,
-               get_average_color,
-               get_size,
-               get_dimensions,
-               get_blurrness_score
-              ]
+def get_arraylike_features(img, methods):
     results = []
     for m in methods:
         results.append(m(img))
     return results
 
 def get_imagefeatures_multi(features, imgcol, prefix='', n_workers=1):
-    # todo: get_arraylike_featuresの引数にmethodsを渡してpartialで固定する
     prefix = prefix + '_'
-    params = [features[imgcol][i] for i in range(features.shape[0])]
+    feature_params = [[perform_color_analysis_black, prefix+'dullness'],
+                      [perform_color_analysis_white, prefix+'whiteness'],
+                      [average_pixel_width,          prefix+'average_pixel_width'],
+                      #[get_dominant_color,           prefix+'dominant_color'],
+                      [get_average_color,            prefix+'average_color'],
+                      [get_size,                     prefix+'image_size'],
+                      [get_dimensions,               prefix+'dim_size'],
+                      [get_blurrness_score,          prefix+'blurrness']
+                      ]
+    num_features = np.array(feature_params).shape[0]
+    methods = [feature_params[i][0] for i in range(num_features)]
+    get_arraylike_features_partial = partial(get_arraylike_features, methods=methods)
+
+    inputsize = features.shape[0]
+    multiprocess_params = [features[imgcol][i] for i in range(inputsize)]
+
     with timer('Image features extraction'):
         with Pool(processes=n_workers) as pool:
-            results = pool.map(get_arraylike_features, params)
+            results = pool.map(get_arraylike_features_partial, multiprocess_params)
 
+    with timer('Transform into pandas dataframe format'):
         # transform into pd.df
-        features[prefix+'dullness'] = [results[i][0] for i in range(features.shape[0])]
-        features[prefix+'whiteness'] = [results[i][1] for i in range(features.shape[0])]
-        features[prefix+'average_pixel_width'] = [results[i][2] for i in range(features.shape[0])]
-        features[prefix+'dominant_color'] = [results[i][3] for i in range(features.shape[0])]
-        features[prefix+'average_color'] = [results[i][4] for i in range(features.shape[0])]
-        features[prefix+'image_size'] = [results[i][5] for i in range(features.shape[0])]
-        features[prefix+'dim_size'] = [results[i][6] for i in range(features.shape[0])]
-        features[prefix+'blurrness'] = [results[i][7] for i in range(features.shape[0])]
+        for i in range(num_features):
+            features[feature_params[i][1]] = [results[j][i] for j in range(inputsize)]
 
-        
         # adhook
-        features[prefix+'dominant_red'] = features[prefix+'dominant_color'].apply(lambda x: x[0]) / 255
-        features[prefix+'dominant_green'] = features[prefix+'dominant_color'].apply(lambda x: x[1]) / 255
-        features[prefix+'dominant_blue'] = features[prefix+'dominant_color'].apply(lambda x: x[2]) / 255
+        #features[prefix+'dominant_red'] = features[prefix+'dominant_color'].apply(lambda x: x[0]) / 255
+        #features[prefix+'dominant_green'] = features[prefix+'dominant_color'].apply(lambda x: x[1]) / 255
+        #features[prefix+'dominant_blue'] = features[prefix+'dominant_color'].apply(lambda x: x[2]) / 255
         features[prefix+'average_red'] = features[prefix+'average_color'].apply(lambda x: x[0]) / 255
         features[prefix+'average_green'] = features[prefix+'average_color'].apply(lambda x: x[1]) / 255
         features[prefix+'average_blue'] = features[prefix+'average_color'].apply(lambda x: x[2]) / 255
         features[prefix+'width'] = features[prefix+'dim_size'].apply(lambda x : x[0])
         features[prefix+'height'] = features[prefix+'dim_size'].apply(lambda x : x[1])
-        features.drop(prefix+'dominant_color', axis=1, inplace=True)        
+        #features.drop(prefix+'dominant_color', axis=1, inplace=True)        
         features.drop(prefix+'average_color', axis=1, inplace=True)
         features.drop(prefix+'dim_size', axis=1, inplace=True)
+
     gc.collect()
     return features
 
+if __name__ == '__main__':
+    targetdir = '../input/ants/'
+    imgs = os.listdir(targetdir)
+    features = pd.DataFrame()
+    features['imagepath'] = imgs
+    features['imagepath'] = features['imagepath'].apply(lambda x: targetdir+str(x))
+    
+    numcpu = multiprocessing.cpu_count()
+    print(f'use {numcpu} cpus')
+    get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
 
-def save_features(features, filename):
-    filepath = features_path + filename
-    features.to_feather(filepath)
+    features.drop('imagepath', axis=1, inplace=True)
+    #features.to_feather('../features/sample.feather')
 
-
-print('ohha')
-imgs = os.listdir(images_path)
-features = pd.DataFrame()
-features['imagepath'] = imgs
-
-numcpu = 2
-print(f'use {numcpu} cpus')
-get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
-
-features.drop('imagepath', axis=1, inplace=True)
-save_features(features, 'sample.feather')
-print('done')
+    print(features.head())
