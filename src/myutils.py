@@ -2,6 +2,7 @@ import time
 from contextlib import contextmanager
 import numpy as np
 import pandas as pd
+import gc
 
 @contextmanager
 def timer(name):
@@ -9,12 +10,13 @@ def timer(name):
     yield
     print(f'[{name}] done in {time.time() - t0:.0f} s')
 
-def reduce_mem_usage(df):
+def reduce_mem_usage(df, verbose=True):
     """ iterate through all the columns of a dataframe and modify the data type
         to reduce memory usage.        
     """
     start_mem = df.memory_usage().sum() / 1024**2
-    print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
+    if verbose:
+        print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
     
     for col in df.columns:
         col_type = df[col].dtype        
@@ -44,9 +46,11 @@ def reduce_mem_usage(df):
             df[col] = df[col].astype(np.float32)
 
     end_mem = df.memory_usage().sum() / 1024**2
-    print('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
-    print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
+    if verbose:
+        print('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
+        print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
     
+    gc.collect()
     return df
     
 

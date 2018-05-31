@@ -13,7 +13,7 @@ from multiprocessing import Pool
 import multiprocessing
 from copy import deepcopy
 from functools import partial
-from myutils import timer
+from myutils import timer, reduce_mem_usage
 
 # define functions
 def check_imgpath(img):
@@ -212,6 +212,7 @@ if __name__ == '__main__':
     get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
 
     features.drop('imagepath', axis=1, inplace=True)
+    features = reduce_mem_usage(features)
     #features.to_feather('../features/sample.feather')
 
     print(features.head())
