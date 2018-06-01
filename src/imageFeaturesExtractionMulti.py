@@ -13,6 +13,7 @@ from multiprocessing import Pool
 import multiprocessing
 from copy import deepcopy
 from functools import partial
+from tqdm import tqdm
 from myutils import timer, reduce_mem_usage
 
 # define functions
@@ -74,7 +75,7 @@ def perform_color_analysis_black(img):
         light_percent1, dark_percent1 = color_analysis(im1)
         light_percent2, dark_percent2 = color_analysis(im2)
     except Exception as e:
-        print('Calculation error')
+        print('Calculation error', img)
         return None
 
     dark_percent = (dark_percent1 + dark_percent2)/2 
@@ -181,11 +182,13 @@ def get_blurrness_score(img):
     fm = cv2.Laplacian(im, cv2.CV_64F).var()
     return fm
 
-def get_arraylike_features(img, methods):
-    results = []
+def get_arraylike_features(arg, methods):
+    index = arg[0]
+    img = arg[1]
+    results = list()
     for m in methods:
         results.append(m(img))
-    return results
+    return index, results
 
 def get_imagefeatures_multi(features, imgcol, prefix='', n_workers=1):
     prefix = prefix + '_'
@@ -203,11 +206,13 @@ def get_imagefeatures_multi(features, imgcol, prefix='', n_workers=1):
     get_arraylike_features_partial = partial(get_arraylike_features, methods=methods)
 
     inputsize = features.shape[0]
-    multiprocess_params = [features[imgcol][i] for i in range(inputsize)]
+    multiprocess_params = features[imgcol].tolist()
 
+    results = list(np.zeros(inputsize))
     with timer('Image features extraction'):
         with Pool(processes=n_workers) as pool:
-            results = pool.map(get_arraylike_features_partial, multiprocess_params)
+            for idx, result in tqdm(pool.imap_unordered(get_arraylike_features_partial, enumerate(multiprocess_params))):
+                results[idx] = result
 
     with timer('Transform into pandas dataframe format'):
         # transform into pd.df
@@ -236,13 +241,13 @@ if __name__ == '__main__':
     features = pd.DataFrame()
     features['imagepath'] = imgs
     features['imagepath'] = features['imagepath'].apply(lambda x: targetdir+str(x))
-    
+
     numcpu = multiprocessing.cpu_count()
     print(f'use {numcpu} cpus')
     get_imagefeatures_multi(features, 'imagepath', prefix='debug', n_workers=numcpu)
 
-    features.drop('imagepath', axis=1, inplace=True)
+    #features.drop('imagepath', axis=1, inplace=True)
     features = reduce_mem_usage(features)
-    #features.to_feather('../features/sample.feather')
+    #features.to_feather('./sample.feather')
 
-    print(features.head())
+    print(features.head(30))
