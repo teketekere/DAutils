@@ -211,7 +211,7 @@ def get_imagefeatures_multi(features, imgcol, prefix='', n_workers=1):
     results = list(np.zeros(inputsize))
     with timer('Image features extraction'):
         with Pool(processes=n_workers) as pool:
-            for idx, result in tqdm(pool.imap_unordered(get_arraylike_features_partial, enumerate(multiprocess_params))):
+            for idx, result in tqdm(pool.imap_unordered(get_arraylike_features_partial, enumerate(multiprocess_params), chunksize=10)):
                 results[idx] = result
 
     with timer('Transform into pandas dataframe format'):
